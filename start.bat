@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title AI Prompt Assistant - Launcher
 
@@ -23,7 +23,7 @@ if not exist "%ROOT%backend\.env" (
 )
 
 echo [1/3] 启动后端 http://localhost:4165
-start "AI Prompt - Backend (4165)" cmd /k "cd /d %ROOT%backend && .venv\Scripts\activate && uvicorn app.main:app --reload --port 4165"
+start "AI Prompt - Backend (4165)" cmd /k "cd /d %ROOT%backend && .venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 4165"
 
 echo [2/3] 启动前端 http://localhost:4163
 start "AI Prompt - Frontend (4163)" cmd /k "cd /d %ROOT%frontend && npm run dev"
