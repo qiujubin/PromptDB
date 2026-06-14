@@ -214,7 +214,13 @@ function viewLeafInLibrary(leaf: TagTreeNode) {
     ElMessage.info(`标签「${leaf.name}」暂无提示词引用`)
     return
   }
-  router.push({ name: 'library', query: { tag_id: String(leaf.id) } })
+  router.push({
+    name: 'library',
+    query: {
+      tag_category: String(leaf.parent_id ?? ''),
+      tag_leaf: String(leaf.id),
+    },
+  })
 }
 
 let leafClickTimer: number | null = null

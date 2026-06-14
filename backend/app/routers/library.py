@@ -18,7 +18,7 @@ async def list_library(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     search: str | None = Query(None, max_length=200),
-    tag_id: int | None = Query(None, ge=1),
+    tag_ids: list[int] | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> LibraryResponse:
     base = select(Prompt)
@@ -28,13 +28,13 @@ async def list_library(
         base = base.where(Prompt.text_en.ilike(like))
         count_base = count_base.where(Prompt.text_en.ilike(like))
 
-    if tag_id is not None:
+    if tag_ids:
         base = base.join(PromptTag, PromptTag.prompt_id == Prompt.id).where(
-            PromptTag.tag_id == tag_id
+            PromptTag.tag_id.in_(tag_ids)
         )
         count_base = count_base.join(
             PromptTag, PromptTag.prompt_id == Prompt.id
-        ).where(PromptTag.tag_id == tag_id)
+        ).where(PromptTag.tag_id.in_(tag_ids))
 
     total = (await db.execute(count_base)).scalar_one()
 

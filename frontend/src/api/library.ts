@@ -12,7 +12,7 @@ export function fetchLibrary(params: {
   page?: number
   page_size?: number
   search?: string
-  tag_id?: number
+  tag_ids?: number[]
 }) {
   return client.get<LibraryResponse>('/library', { params }).then((r) => r.data)
 }

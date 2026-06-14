@@ -49,24 +49,15 @@ const allOnPageSelected = computed(
 )
 
 const tagTree = ref<TagTreeResponse>({ categories: [] })
-const tagFilterId = ref<number | null>(null)
-const tagFilterPath = ref<string>('')
+const selectedCategoryId = ref<number | null>(null)
+const selectedLeafId = ref<number | null>(null)
 
-const leafOptions = computed(() => {
-  const opts: { id: number; path: string; usage_count: number }[] = []
-  function walk(nodes: TagTreeNode[], prefix: string) {
-    for (const n of nodes) {
-      const path = prefix ? `${prefix} / ${n.name}` : n.name
-      if (n.children.length === 0) {
-        opts.push({ id: n.id, path, usage_count: n.usage_count })
-      } else {
-        walk(n.children, path)
-      }
-    }
-  }
-  walk(tagTree.value.categories, '')
-  return opts
+const selectedCategory = computed(() => {
+  if (selectedCategoryId.value === null) return null
+  return tagTree.value.categories.find((c) => c.id === selectedCategoryId.value) ?? null
 })
+
+const availableLeaves = computed(() => selectedCategory.value?.children ?? [])
 
 const drawerOpen = ref(false)
 const editingPrompt = ref<LibraryItem | null>(null)
@@ -101,11 +92,12 @@ async function loadTags() {
 async function reload() {
   loading.value = true
   try {
+    const tagIds = collectTagIds()
     const resp = await fetchLibrary({
       page: pagination.page,
       page_size: pagination.pageSize,
       search: search.value.trim() || undefined,
-      tag_id: tagFilterId.value ?? undefined,
+      tag_ids: tagIds.length ? tagIds : undefined,
     })
     items.value = resp.items
     total.value = resp.total
@@ -115,6 +107,27 @@ async function reload() {
     loading.value = false
   }
 }
+
+function collectTagIds(): number[] {
+  if (selectedLeafId.value !== null) return [selectedLeafId.value]
+  if (selectedCategory.value) {
+    return selectedCategory.value.children.map((c) => c.id)
+  }
+  return []
+}
+
+const activeFilterPath = computed(() => {
+  if (selectedLeaf.value) {
+    return tagPathByIdFlat.value.get(selectedLeaf.value.id) ?? selectedLeaf.value.name
+  }
+  if (selectedCategory.value) return selectedCategory.value.name
+  return ''
+})
+
+const selectedLeaf = computed(() => {
+  if (selectedLeafId.value === null) return null
+  return availableLeaves.value.find((l) => l.id === selectedLeafId.value) ?? null
+})
 
 function onSearch() {
   pagination.page = 1
@@ -216,34 +229,52 @@ async function onBulkCopy() {
   }
 }
 
-function applyTagFilter(tagId: number | null) {
+function applyTagFilter(categoryId: number | null, leafId: number | null = null) {
   const nextQuery = { ...route.query }
-  if (tagId === null) {
-    delete nextQuery.tag_id
+  if (categoryId === null) {
+    delete nextQuery.tag_category
   } else {
-    nextQuery.tag_id = String(tagId)
+    nextQuery.tag_category = String(categoryId)
+  }
+  if (leafId === null) {
+    delete nextQuery.tag_leaf
+  } else {
+    nextQuery.tag_leaf = String(leafId)
   }
   router.replace({ name: 'library', query: nextQuery })
 }
 
 function syncTagFilterFromRoute() {
-  const raw = route.query.tag_id
-  const id = typeof raw === 'string' && raw ? Number(raw) : null
-  if (id !== null && (Number.isNaN(id) || id <= 0)) return
-  tagFilterId.value = id
-  tagFilterPath.value = id !== null
-    ? tagPathByIdFlat.value.get(id) ?? `#${id}`
-    : ''
+  const catRaw = route.query.tag_category
+  const leafRaw = route.query.tag_leaf
+  const catId = typeof catRaw === 'string' && catRaw ? Number(catRaw) : null
+  const leafId = typeof leafRaw === 'string' && leafRaw ? Number(leafRaw) : null
+  if (catId !== null && (Number.isNaN(catId) || catId <= 0)) return
+  if (leafId !== null && (Number.isNaN(leafId) || leafId <= 0)) return
+  selectedCategoryId.value = catId
+  selectedLeafId.value = leafId
   pagination.page = 1
   reload()
 }
 
-function onTagChipClick(tag: TagOut) {
-  applyTagFilter(tag.id)
+function onCategoryChange(id: number | null) {
+  selectedLeafId.value = null
+  applyTagFilter(id, null)
+}
+
+function onLeafChange(id: number | null) {
+  applyTagFilter(selectedCategoryId.value, id)
 }
 
 function clearTagFilter() {
-  applyTagFilter(null)
+  applyTagFilter(null, null)
+}
+
+function onTagChipClick(tag: TagOut) {
+  const cat = tagTree.value.categories.find((c) =>
+    c.children.some((l) => l.id === tag.id),
+  )
+  applyTagFilter(cat?.id ?? null, tag.id)
 }
 
 async function openTagDrawer(row: LibraryItem) {
@@ -314,7 +345,7 @@ function preview(text: string, max = 80) {
 }
 
 watch(
-  () => route.query.tag_id,
+  () => [route.query.tag_category, route.query.tag_leaf],
   () => {
     syncTagFilterFromRoute()
   },
@@ -341,6 +372,36 @@ onMounted(async () => {
             <el-button :icon="Search" @click="onSearch" />
           </template>
         </el-input>
+        <el-select
+          v-model="selectedCategoryId"
+          placeholder="大标签"
+          clearable
+          :disabled="!tagTree.categories.length"
+          style="width: 160px"
+          @change="onCategoryChange"
+        >
+          <el-option
+            v-for="cat in tagTree.categories"
+            :key="cat.id"
+            :label="`${cat.name} (${cat.usage_count})`"
+            :value="cat.id"
+          />
+        </el-select>
+        <el-select
+          v-model="selectedLeafId"
+          placeholder="小标签"
+          clearable
+          :disabled="!availableLeaves.length"
+          style="width: 160px"
+          @change="onLeafChange"
+        >
+          <el-option
+            v-for="leaf in availableLeaves"
+            :key="leaf.id"
+            :label="`${leaf.name} (${leaf.usage_count})`"
+            :value="leaf.id"
+          />
+        </el-select>
         <el-button :icon="Refresh" @click="reload">刷新</el-button>
         <el-button
           :type="multiSelect ? 'warning' : 'default'"
@@ -352,41 +413,12 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div v-if="tagFilterId !== null" class="filter-bar">
+    <div v-if="activeFilterPath" class="filter-bar">
       <span class="filter-label">当前筛选：</span>
       <el-tag type="primary" effect="dark" round :closable="true" @close="clearTagFilter">
         <el-icon><PriceTag /></el-icon>
-        <span style="margin-left: 4px">{{ tagFilterPath }}</span>
+        <span style="margin-left: 4px">{{ activeFilterPath }}</span>
       </el-tag>
-    </div>
-
-    <div v-if="leafOptions.length" class="tag-filter">
-      <span class="filter-label">按标签筛选：</span>
-      <div class="tag-filter-chips">
-        <el-tag
-          :type="tagFilterId === null ? 'primary' : 'info'"
-          :effect="tagFilterId === null ? 'dark' : 'plain'"
-          size="small"
-          round
-          class="filter-chip"
-          @click="clearTagFilter"
-        >
-          全部
-        </el-tag>
-        <el-tag
-          v-for="opt in leafOptions"
-          :key="opt.id"
-          :type="tagFilterId === opt.id ? 'primary' : 'info'"
-          :effect="tagFilterId === opt.id ? 'dark' : 'plain'"
-          size="small"
-          round
-          class="filter-chip"
-          @click="applyTagFilter(opt.id)"
-        >
-          {{ opt.path }}
-          <span class="chip-count">{{ opt.usage_count }}</span>
-        </el-tag>
-      </div>
     </div>
 
     <transition name="slide">
@@ -645,40 +677,6 @@ onMounted(async () => {
 .filter-label {
   font-size: 13px;
   color: var(--el-text-color-secondary);
-}
-
-.tag-filter {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 14px;
-  padding: 10px 14px;
-  background: var(--el-fill-color-blank);
-  border: 1px dashed var(--el-border-color-light);
-  border-radius: 6px;
-}
-
-.tag-filter-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex: 1;
-}
-
-.filter-chip {
-  cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.filter-chip:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.18);
-}
-
-.chip-count {
-  margin-left: 4px;
-  font-size: 10px;
-  opacity: 0.75;
 }
 
 .bulk-bar {
