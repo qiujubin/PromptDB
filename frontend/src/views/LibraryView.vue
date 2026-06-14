@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Search,
@@ -35,6 +36,9 @@ const search = ref('')
 
 const pagination = reactive({ page: 1, pageSize: 30 })
 
+const route = useRoute()
+const router = useRouter()
+
 const multiSelect = ref(false)
 const selected = ref<Set<number>>(new Set())
 const bulkWorking = ref(false)
@@ -47,6 +51,22 @@ const allOnPageSelected = computed(
 const tagTree = ref<TagTreeResponse>({ categories: [] })
 const tagFilterId = ref<number | null>(null)
 const tagFilterPath = ref<string>('')
+
+const leafOptions = computed(() => {
+  const opts: { id: number; path: string; usage_count: number }[] = []
+  function walk(nodes: TagTreeNode[], prefix: string) {
+    for (const n of nodes) {
+      const path = prefix ? `${prefix} / ${n.name}` : n.name
+      if (n.children.length === 0) {
+        opts.push({ id: n.id, path, usage_count: n.usage_count })
+      } else {
+        walk(n.children, path)
+      }
+    }
+  }
+  walk(tagTree.value.categories, '')
+  return opts
+})
 
 const drawerOpen = ref(false)
 const editingPrompt = ref<LibraryItem | null>(null)
@@ -196,18 +216,34 @@ async function onBulkCopy() {
   }
 }
 
-function onTagChipClick(tag: TagOut) {
-  tagFilterId.value = tag.id
-  tagFilterPath.value = tagPathByIdFlat.value.get(tag.id) ?? tag.name
+function applyTagFilter(tagId: number | null) {
+  const nextQuery = { ...route.query }
+  if (tagId === null) {
+    delete nextQuery.tag_id
+  } else {
+    nextQuery.tag_id = String(tagId)
+  }
+  router.replace({ name: 'library', query: nextQuery })
+}
+
+function syncTagFilterFromRoute() {
+  const raw = route.query.tag_id
+  const id = typeof raw === 'string' && raw ? Number(raw) : null
+  if (id !== null && (Number.isNaN(id) || id <= 0)) return
+  tagFilterId.value = id
+  tagFilterPath.value = id !== null
+    ? tagPathByIdFlat.value.get(id) ?? `#${id}`
+    : ''
   pagination.page = 1
   reload()
 }
 
+function onTagChipClick(tag: TagOut) {
+  applyTagFilter(tag.id)
+}
+
 function clearTagFilter() {
-  tagFilterId.value = null
-  tagFilterPath.value = ''
-  pagination.page = 1
-  reload()
+  applyTagFilter(null)
 }
 
 async function openTagDrawer(row: LibraryItem) {
@@ -277,8 +313,16 @@ function preview(text: string, max = 80) {
   return text.length > max ? text.slice(0, max) + '…' : text
 }
 
+watch(
+  () => route.query.tag_id,
+  () => {
+    syncTagFilterFromRoute()
+  },
+)
+
 onMounted(async () => {
-  await Promise.all([loadTags(), reload()])
+  await loadTags()
+  syncTagFilterFromRoute()
 })
 </script>
 
@@ -315,6 +359,35 @@ onMounted(async () => {
         <el-icon><PriceTag /></el-icon>
         <span style="margin-left: 4px">{{ tagFilterPath }}</span>
       </el-tag>
+    </div>
+
+    <div v-if="leafOptions.length" class="tag-filter">
+      <span class="filter-label">按标签筛选：</span>
+      <div class="tag-filter-chips">
+        <el-tag
+          :type="tagFilterId === null ? 'primary' : 'info'"
+          :effect="tagFilterId === null ? 'dark' : 'plain'"
+          size="small"
+          round
+          class="filter-chip"
+          @click="clearTagFilter"
+        >
+          全部
+        </el-tag>
+        <el-tag
+          v-for="opt in leafOptions"
+          :key="opt.id"
+          :type="tagFilterId === opt.id ? 'primary' : 'info'"
+          :effect="tagFilterId === opt.id ? 'dark' : 'plain'"
+          size="small"
+          round
+          class="filter-chip"
+          @click="applyTagFilter(opt.id)"
+        >
+          {{ opt.path }}
+          <span class="chip-count">{{ opt.usage_count }}</span>
+        </el-tag>
+      </div>
     </div>
 
     <transition name="slide">
@@ -565,6 +638,40 @@ onMounted(async () => {
 .filter-label {
   font-size: 13px;
   color: var(--el-text-color-secondary);
+}
+
+.tag-filter {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: var(--el-fill-color-blank);
+  border: 1px dashed var(--el-border-color-light);
+  border-radius: 6px;
+}
+
+.tag-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.filter-chip {
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.filter-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.18);
+}
+
+.chip-count {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.75;
 }
 
 .bulk-bar {

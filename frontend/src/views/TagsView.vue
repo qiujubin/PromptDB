@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, type Directive } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, EditPen, Delete, MagicStick, Refresh } from '@element-plus/icons-vue'
 import {
@@ -11,6 +12,8 @@ import {
   type TagTreeNode,
   type TagTreeResponse,
 } from '@/api/tags'
+
+const router = useRouter()
 
 const vFocus: Directive = {
   mounted(el) {
@@ -206,6 +209,32 @@ async function onDeleteLeaf(leaf: TagTreeNode) {
   }
 }
 
+function viewLeafInLibrary(leaf: TagTreeNode) {
+  if (leaf.usage_count === 0) {
+    ElMessage.info(`标签「${leaf.name}」暂无提示词引用`)
+    return
+  }
+  router.push({ name: 'library', query: { tag_id: String(leaf.id) } })
+}
+
+let leafClickTimer: number | null = null
+
+function onLeafClick(leaf: TagTreeNode) {
+  if (leafClickTimer !== null) clearTimeout(leafClickTimer)
+  leafClickTimer = window.setTimeout(() => {
+    leafClickTimer = null
+    viewLeafInLibrary(leaf)
+  }, 250)
+}
+
+function onLeafDblClick(leaf: TagTreeNode) {
+  if (leafClickTimer !== null) {
+    clearTimeout(leafClickTimer)
+    leafClickTimer = null
+  }
+  startEditLeaf(leaf)
+}
+
 onMounted(reload)
 </script>
 
@@ -284,10 +313,26 @@ onMounted(reload)
               @keyup.esc="cancelEdit"
               v-focus
             />
-            <span v-else class="leaf-name" @dblclick="startEditLeaf(leaf)">
+            <span
+              v-else
+              class="leaf-name"
+              :class="{ 'leaf-name-clickable': leaf.usage_count > 0 }"
+              :title="leaf.usage_count > 0 ? '点击查看使用此标签的提示词' : '尚无提示词引用'"
+              @click="onLeafClick(leaf)"
+              @dblclick="onLeafDblClick(leaf)"
+            >
               {{ leaf.name }}
             </span>
-            <span class="leaf-count">{{ leaf.usage_count }}</span>
+            <el-tooltip
+              v-if="leaf.usage_count > 0"
+              content="点击查看使用此标签的提示词"
+              placement="top"
+            >
+              <span class="leaf-count leaf-count-clickable" @click="onLeafClick(leaf)">
+                {{ leaf.usage_count }}
+              </span>
+            </el-tooltip>
+            <span v-else class="leaf-count">{{ leaf.usage_count }}</span>
             <el-tooltip content="重命名" placement="top">
               <el-button :icon="EditPen" size="small" link @click="startEditLeaf(leaf)" />
             </el-tooltip>
@@ -458,11 +503,35 @@ onMounted(reload)
   cursor: text;
 }
 
+.leaf-name-clickable {
+  cursor: pointer;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  border-radius: 4px;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.leaf-name-clickable:hover {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
 .leaf-count {
   font-size: 11px;
   color: var(--el-text-color-placeholder);
   background: var(--el-fill-color-light);
   padding: 1px 6px;
   border-radius: 8px;
+}
+
+.leaf-count-clickable {
+  cursor: pointer;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  transition: background-color 0.12s ease;
+}
+
+.leaf-count-clickable:hover {
+  background: var(--el-color-primary-light-7);
 }
 </style>
