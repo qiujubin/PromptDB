@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Backend
+backend/alembic/versions/__pycache__/
+*.db
+*.sqlite3
+
+# Frontend
+node_modules/
+dist/
+.vite/
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
+logs/
