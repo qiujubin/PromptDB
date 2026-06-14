@@ -335,7 +335,6 @@ onMounted(async () => {
           v-model="search"
           placeholder="搜索英文片段..."
           clearable
-          style="max-width: 360px"
           @keyup.enter="onSearch"
         >
           <template #append>
@@ -621,7 +620,15 @@ onMounted(async () => {
 .toolbar {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
+  align-items: center;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.toolbar .el-input {
+  flex: 1 1 280px;
+  min-width: 200px;
+  max-width: 420px;
 }
 
 .filter-bar {
