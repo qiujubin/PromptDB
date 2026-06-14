@@ -60,6 +60,8 @@ async def _load_tree(db: AsyncSession) -> list[TagTreeNode]:
             parent = by_id.get(r.parent_id)
             if parent is not None:
                 parent.children.append(node)
+    for cat in roots:
+        cat.usage_count = sum(leaf.usage_count for leaf in cat.children)
     return roots
 
 
