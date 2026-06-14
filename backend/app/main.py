@@ -10,6 +10,7 @@ from .db import Base, engine
 from .routers import generate as generate_router
 from .routers import library as library_router
 from .routers import prompts as prompts_router
+from .routers import tags as tags_router
 from .services import deepseek
 
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +51,7 @@ async def health() -> dict[str, str]:
 app.include_router(generate_router.router)
 app.include_router(prompts_router.router)
 app.include_router(library_router.router)
+app.include_router(tags_router.router)
 
 
 if __name__ == "__main__":

@@ -23,9 +23,9 @@ async function copy() {
     v-if="compact"
     type="primary"
     size="small"
-    link
     :icon="DocumentCopy"
     :disabled="disabled || !text"
+    class="copy-btn-compact"
     @click="copy"
   >
     复制
@@ -40,3 +40,14 @@ async function copy() {
     一键复制
   </el-button>
 </template>
+
+<style scoped>
+.copy-btn-compact {
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(64, 158, 255, 0.3);
+}
+.copy-btn-compact:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(64, 158, 255, 0.45);
+}
+</style>

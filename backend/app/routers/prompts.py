@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,9 +7,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
-from ..models import Prompt
+from ..models import Prompt, PromptTag, Tag
 from ..schemas import LibraryItem, SaveRequest, SaveResponse
-from ..services import deepseek
+from ..services import deepseek, tagger
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 logger = logging.getLogger(__name__)
@@ -29,6 +30,25 @@ def _split_text(raw: str) -> list[str]:
     return deduped
 
 
+async def _upsert_tag(
+    db: AsyncSession, name: str, parent_id: int | None
+) -> Tag:
+    existing = (
+        await db.execute(
+            select(Tag).where(
+                Tag.parent_id.is_(parent_id) if parent_id is None else Tag.parent_id == parent_id,
+                func.lower(Tag.name) == name.lower(),
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+    row = Tag(name=name, parent_id=parent_id)
+    db.add(row)
+    await db.flush()
+    return row
+
+
 @router.post("/save", response_model=SaveResponse)
 async def save_prompts(req: SaveRequest, db: AsyncSession = Depends(get_db)) -> SaveResponse:
     items = _split_text(req.raw_text)
@@ -42,8 +62,6 @@ async def save_prompts(req: SaveRequest, db: AsyncSession = Depends(get_db)) -> 
     ).scalars().all()
     existing_keys = {r.text_en.lower() for r in existing_rows}
 
-    saved = 0
-    incremented = 0
     new_inserts: list[dict] = []
     new_texts: list[str] = []
 
@@ -60,9 +78,16 @@ async def save_prompts(req: SaveRequest, db: AsyncSession = Depends(get_db)) -> 
                 "UPDATE prompts SET usage_count = usage_count + 1, "
                 "last_used_at = now() WHERE lower(text_en) = ANY(:keys)"
             ),
-            {"keys": [k for k in existing_keys if k in {r.text_en.lower() for r in existing_rows}]},
+            {"keys": [r.text_en.lower() for r in existing_rows]},
         )
         incremented = len(existing_rows)
+    else:
+        incremented = 0
+
+    saved = 0
+    failed = 0
+    tag_failures = 0
+    inserted_by_text: dict[str, int] = {}
 
     if new_inserts:
         stmt = (
@@ -73,34 +98,58 @@ async def save_prompts(req: SaveRequest, db: AsyncSession = Depends(get_db)) -> 
         )
         result = await db.execute(stmt)
         inserted_rows = result.all()
-        inserted_by_text: dict[str, int] = {row.text_en: row.id for row in inserted_rows}
+        inserted_by_text = {row.text_en: row.id for row in inserted_rows}
+        saved = len(inserted_rows)
 
-        translations = await deepseek.translate_batch(new_texts)
-        failed = 0
+        categories_rows = (
+            await db.execute(select(Tag.name).where(Tag.parent_id.is_(None)))
+        ).all()
+        existing_categories = [r[0] for r in categories_rows]
+
+        translations, tagging = await asyncio.gather(
+            deepseek.translate_batch(new_texts),
+            tagger.auto_tag_batch(new_texts, existing_categories),
+            return_exceptions=False,
+        )
+
         for text_en, zh in zip(new_texts, translations):
             pid = inserted_by_text.get(text_en)
-            if pid is None:
-                continue
-            if zh is None:
-                failed += 1
+            if pid is None or zh is None:
+                if zh is None:
+                    failed += 1
                 continue
             await db.execute(
                 text("UPDATE prompts SET text_zh = :zh WHERE id = :id"),
                 {"zh": zh, "id": pid},
             )
-        saved = len(inserted_rows)
-    else:
-        failed = 0
+
+        for text_en, tag_list in zip(new_texts, tagging):
+            pid = inserted_by_text.get(text_en)
+            if pid is None or not tag_list:
+                if not tag_list:
+                    tag_failures += 1
+                continue
+            for tag_info in tag_list:
+                try:
+                    cat = await _upsert_tag(db, tag_info["category"], None)
+                    leaf = await _upsert_tag(db, tag_info["name"], cat.id)
+                    db.add(PromptTag(prompt_id=pid, tag_id=leaf.id))
+                except Exception as e:
+                    logger.warning("Tag upsert failed for prompt %d: %s", pid, e)
+                    tag_failures += 1
 
     await db.commit()
 
     saved_items = (
-        await db.execute(select(Prompt).where(func.lower(Prompt.text_en).in_(lowered)))
+        await db.execute(
+            select(Prompt).where(func.lower(Prompt.text_en).in_(lowered))
+        )
     ).scalars().all()
 
     return SaveResponse(
         saved=saved,
         incremented=incremented,
         failed_translations=failed,
+        tag_failures=tag_failures,
         items=[LibraryItem.model_validate(p) for p in saved_items],
     )
