@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, type Directive } from 'vue'
+defineOptions({ name: 'TagsView' })
+import { computed, onActivated, onMounted, ref, type Directive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, EditPen, Delete, MagicStick, Refresh } from '@element-plus/icons-vue'
@@ -242,6 +243,15 @@ function onLeafDblClick(leaf: TagTreeNode) {
 }
 
 onMounted(reload)
+
+let activatedOnce = false
+onActivated(() => {
+  if (!activatedOnce) {
+    activatedOnce = true
+    return
+  }
+  reload()
+})
 </script>
 
 <template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+defineOptions({ name: 'LibraryView' })
+import { computed, onActivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -354,6 +355,16 @@ watch(
 onMounted(async () => {
   await loadTags()
   syncTagFilterFromRoute()
+})
+
+let activatedOnce = false
+onActivated(async () => {
+  if (!activatedOnce) {
+    activatedOnce = true
+    return
+  }
+  await loadTags()
+  await reload()
 })
 </script>
 

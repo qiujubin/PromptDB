@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'SaverView' })
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { FolderAdd } from '@element-plus/icons-vue'
