@@ -67,7 +67,7 @@ def _build_system_prompt(existing_categories: list[str]) -> str:
         "你是一个 AI 绘图提示词分类助手。"
         "为每个英文提示词片段打 1–3 个层级标签。\n"
         f"{cat_rule}\n"
-        "子标签（name）描述具体细分（如\"手部姿势\"\"夜景\"）。\n"
+        "子标签（name）描述具体细分（如\"手部姿势\"\"上衣\"）。\n"
         "严格按 JSON 输出，格式：\n"
         '{"tags": [{"category": "姿势", "name": "手部姿势"}, ...]}\n'
         "只输出 JSON，不要任何解释。"

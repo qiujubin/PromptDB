@@ -4,8 +4,8 @@
 
 1. **生成提示词** — 输入中文描述，DeepSeek 生成可直接用于 Midjourney / Stable Diffusion 的英文提示词
 2. **保存提示词** — 把英文提示词按 `,` 切分后入库，自动调用 DeepSeek 翻译为中文，并用 AI 分配层级标签
-3. **提示词库** — 卡片式浏览所有积累的提示词，支持多选批量操作、按标签筛选、手动编辑标签
-4. **标签管理** — 树形维护「分类 → 子标签」两级体系，支持重命名、删除；提供「批量补打标签」按钮为旧数据补全 AI 标签
+3. **提示词库** — 卡片式浏览，支持搜索、分类 / 子标签双 select 筛选、多选批量删除、抽屉式编辑标签
+4. **标签管理** — 树形维护「分类 → 子标签」两级体系；分类引用数为其下子标签累加和；点击标签可直接跳转到提示词库查看；提供「批量补打标签」按钮为旧数据补全 AI 标签
 
 ## 技术栈
 
@@ -113,12 +113,26 @@ npm run dev
 | ----------------------- | ------------------------- | ---------------------------------------------------------------- |
 | `DEEPSEEK_API_KEY`      | DeepSeek API 密钥         | （必填）                                                         |
 | `DEEPSEEK_BASE_URL`     | DeepSeek API base URL     | `https://api.deepseek.com`                                       |
-| `DEEPSEEK_MODEL`        | 使用的模型                | `deepseek-chat`                                                  |
+| `DEEPSEEK_MODEL`        | 使用的模型                | `deepseek-v4-pro`                                                |
 | `DATABASE_URL`          | PostgreSQL 异步连接串     | `postgresql+asyncpg://postgres:postgres@localhost:5432/promptdb` |
 | `APP_PORT`              | 后端端口                  | `4165`                                                           |
 | `ALLOWED_ORIGIN`        | 允许的前端 origin（CORS） | `http://localhost:4163`                                          |
 | `TRANSLATE_CONCURRENCY` | 翻译 / 打标签并发上限     | `5`                                                              |
 | `REQUEST_TIMEOUT`       | DeepSeek 请求超时（秒）   | `30`                                                             |
+
+> 注：`deepseek-chat` / `deepseek-reasoner` 将于 2026/07/24 弃用，已默认切到 `deepseek-v4-pro`。
+
+## 自定义 AI 提示词
+
+三个调用 DeepSeek 的场景，对应三处提示词：
+
+| 场景                         | 文件                                                  | 说明                                                                 |
+| ---------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| 生成（中文 → 英文绘图提示词） | `frontend/src/views/GeneratorView.vue` `PRESET_SYSTEM_PROMPT` | 前端常量，作为「生成」页系统提示词输入框默认值，用户可临时改写         |
+| 英 → 中翻译                  | `backend/app/services/deepseek.py` `_translate_one`   | 保存提示词时用，写死在后端                                            |
+| 自动打标签                   | `backend/app/services/tagger.py` `_build_system_prompt` | 含已有分类复用规则与严格 JSON 输出格式                                |
+
+改后端需重启 `uvicorn`；改前端 vite 会热更。
 
 ## API 一览
 
