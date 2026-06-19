@@ -8,6 +8,7 @@ const activeIndex = computed(() => route.path)
 
 const menus = [
   { path: '/generate', label: '生成提示词' },
+  { path: '/parser', label: '解析提示词' },
   { path: '/saver', label: '保存提示词' },
   { path: '/library', label: '提示词库' },
   { path: '/records', label: '历史记录' },

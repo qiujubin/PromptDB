@@ -31,3 +31,38 @@ export interface SaveResponse {
 export function savePrompts(req: SaveRequest) {
   return client.post<SaveResponse>('/prompts/save', req).then((r) => r.data)
 }
+
+export interface ParseItem {
+  text_en: string
+  text_zh: string | null
+}
+
+export interface ParseRequest {
+  raw_text: string
+}
+
+export interface ParseResponse {
+  items: ParseItem[]
+  split_count: number
+  translation_failures: number
+}
+
+export interface ImportRequest {
+  items: ParseItem[]
+  source?: string
+}
+
+export interface ImportResponse {
+  saved: number
+  incremented: number
+  tag_failures: number
+  items: LibraryItem[]
+}
+
+export function parsePrompts(req: ParseRequest) {
+  return client.post<ParseResponse>('/prompts/parse', req).then((r) => r.data)
+}
+
+export function importPrompts(req: ImportRequest) {
+  return client.post<ImportResponse>('/prompts/import', req).then((r) => r.data)
+}

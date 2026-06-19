@@ -127,4 +127,31 @@ class ImageOrderUpdate(BaseModel):
     image_ids: list[int] = Field(..., min_length=1, max_length=50)
 
 
+class ParseItem(BaseModel):
+    text_en: str = Field(..., min_length=1, max_length=500)
+    text_zh: str | None = Field(default=None, max_length=2000)
+
+
+class ParseRequest(BaseModel):
+    raw_text: str = Field(..., min_length=1, max_length=20000)
+
+
+class ParseResponse(BaseModel):
+    items: list[ParseItem]
+    split_count: int
+    translation_failures: int
+
+
+class ImportRequest(BaseModel):
+    items: list[ParseItem] = Field(..., min_length=1, max_length=500)
+    source: str = Field(default="parser", max_length=64)
+
+
+class ImportResponse(BaseModel):
+    saved: int
+    incremented: int
+    tag_failures: int
+    items: list[LibraryItem]
+
+
 TagTreeNode.model_rebuild()
