@@ -10,6 +10,7 @@ const menus = [
   { path: '/generate', label: '生成提示词' },
   { path: '/saver', label: '保存提示词' },
   { path: '/library', label: '提示词库' },
+  { path: '/records', label: '历史记录' },
   { path: '/tags', label: '标签管理' },
 ]
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'GeneratorView' })
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import { MagicStick } from "@element-plus/icons-vue";
 import PromptOutputCard from "@/components/PromptOutputCard.vue";
@@ -18,6 +19,16 @@ const systemPrompt = ref<string>(PRESET_SYSTEM_PROMPT);
 const userInput = ref<string>("");
 const output = ref<string>("");
 const loading = ref(false);
+
+const route = useRoute();
+
+onMounted(() => {
+  const prefill = route.query.prefill;
+  if (typeof prefill === "string" && prefill.trim()) {
+    userInput.value = prefill;
+    output.value = "";
+  }
+});
 
 async function onGenerate() {
   if (!userInput.value.trim()) {
@@ -78,7 +89,7 @@ async function onGenerate() {
       </el-form-item>
     </el-form>
 
-    <PromptOutputCard :text="output" :loading="loading" />
+    <PromptOutputCard :text="output" :loading="loading" :record-zh="userInput" />
   </el-card>
 </template>
 

@@ -5,7 +5,7 @@ import { FolderAdd } from '@element-plus/icons-vue'
 import CopyButton from './CopyButton.vue'
 import { savePrompts } from '@/api/prompts'
 
-const props = defineProps<{ text: string; loading?: boolean }>()
+const props = defineProps<{ text: string; loading?: boolean; recordZh?: string }>()
 
 const saving = ref(false)
 
@@ -16,11 +16,16 @@ async function onSave() {
   }
   saving.value = true
   try {
-    const resp = await savePrompts({ raw_text: props.text, source: 'generator' })
+    const resp = await savePrompts({
+      raw_text: props.text,
+      source: 'generator',
+      text_zh: props.recordZh?.trim() || undefined,
+    })
     const parts: string[] = []
     if (resp.saved) parts.push(`新增 ${resp.saved} 条`)
     if (resp.incremented) parts.push(`已存在并累计 ${resp.incremented} 次`)
     if (resp.failed_translations) parts.push(`翻译失败 ${resp.failed_translations} 条`)
+    if (resp.record_id) parts.push(`已记录到历史 #${resp.record_id}`)
     ElMessage.success(parts.length ? parts.join('，') : '已保存')
   } catch (e) {
     ElMessage.error((e as Error).message)

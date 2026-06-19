@@ -16,6 +16,7 @@ export interface LibraryItem {
 export interface SaveRequest {
   raw_text: string
   source?: string
+  text_zh?: string
 }
 
 export interface SaveResponse {
@@ -24,6 +25,7 @@ export interface SaveResponse {
   failed_translations: number
   tag_failures: number
   items: LibraryItem[]
+  record_id?: number | null
 }
 
 export function savePrompts(req: SaveRequest) {

@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
-from ..models import Prompt, PromptTag, Tag
+from ..models import GenerationRecord, Prompt, PromptTag, Tag
 from ..schemas import LibraryItem, SaveRequest, SaveResponse
 from ..services import deepseek, tagger
 
@@ -146,10 +146,28 @@ async def save_prompts(req: SaveRequest, db: AsyncSession = Depends(get_db)) -> 
         )
     ).scalars().all()
 
+    record_id_out: int | None = None
+    if req.text_zh and req.text_zh.strip() and saved_items:
+        zh = req.text_zh.strip()
+        default_name = (zh[:30] + ("…" if len(zh) > 30 else "")).strip()
+        record = GenerationRecord(
+            name=default_name or None,
+            text_zh=zh,
+            text_en=", ".join([p.text_en for p in saved_items]),
+            rating=0,
+            is_favorite=False,
+        )
+        record.prompts = list(saved_items)
+        db.add(record)
+        await db.commit()
+        await db.refresh(record)
+        record_id_out = record.id
+
     return SaveResponse(
         saved=saved,
         incremented=incremented,
         failed_translations=failed,
         tag_failures=tag_failures,
         items=[LibraryItem.model_validate(p) for p in saved_items],
+        record_id=record_id_out,
     )

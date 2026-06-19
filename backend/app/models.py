@@ -1,11 +1,14 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
+    Column,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
+    Table,
     Text,
     func,
     text,
@@ -13,6 +16,30 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
+
+
+generation_record_prompts = Table(
+    "generation_record_prompts",
+    Base.metadata,
+    Column(
+        "record_id",
+        Integer,
+        ForeignKey("generation_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "prompt_id",
+        Integer,
+        ForeignKey("prompts.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    ),
+)
 
 
 class Prompt(Base):
@@ -51,6 +78,11 @@ class Prompt(Base):
         lazy="selectin",
     )
 
+    records: Mapped[list["GenerationRecord"]] = relationship(
+        secondary="generation_record_prompts",
+        back_populates="prompts",
+    )
+
 
 class Tag(Base):
     __tablename__ = "tags"
@@ -87,3 +119,61 @@ class PromptTag(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class GenerationRecord(Base):
+    __tablename__ = "generation_records"
+    __table_args__ = (
+        Index("ix_grec_is_favorite", "is_favorite"),
+        Index("ix_grec_created_at", text("created_at DESC")),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    text_zh: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_favorite: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    images: Mapped[list["GenerationRecordImage"]] = relationship(
+        back_populates="record",
+        cascade="all, delete-orphan",
+        order_by="GenerationRecordImage.position",
+        lazy="selectin",
+    )
+    prompts: Mapped[list["Prompt"]] = relationship(
+        secondary="generation_record_prompts",
+        back_populates="records",
+        lazy="selectin",
+    )
+
+
+class GenerationRecordImage(Base):
+    __tablename__ = "generation_record_images"
+    __table_args__ = (Index("ix_grec_img_record_pos", "record_id", "position"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    record_id: Mapped[int] = mapped_column(
+        ForeignKey("generation_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    record: Mapped["GenerationRecord"] = relationship(back_populates="images")
