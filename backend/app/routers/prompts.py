@@ -19,6 +19,7 @@ from ..schemas import (
     SaveResponse,
 )
 from ..services import deepseek, tagger
+from ..services.text_utils import strip_prompt_weight
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 logger = logging.getLogger(__name__)
@@ -31,11 +32,14 @@ def _split_text(raw: str) -> list[str]:
     for p in parts:
         if not p:
             continue
-        key = p.lower()
+        cleaned = strip_prompt_weight(p)
+        if not cleaned:
+            continue
+        key = cleaned.lower()
         if key in seen:
             continue
         seen.add(key)
-        deduped.append(p)
+        deduped.append(cleaned)
     return deduped
 
 

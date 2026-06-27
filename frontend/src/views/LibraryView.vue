@@ -375,7 +375,7 @@ onActivated(async () => {
       <div class="toolbar">
         <el-input
           v-model="search"
-          placeholder="搜索英文片段..."
+          placeholder="搜索中英文关键词（空格分隔多个）"
           clearable
           @keyup.enter="onSearch"
         >

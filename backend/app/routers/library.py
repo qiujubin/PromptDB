@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import and_, delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
@@ -24,9 +24,17 @@ async def list_library(
     base = select(Prompt)
     count_base = select(func.count()).select_from(Prompt)
     if search:
-        like = f"%{search}%"
-        base = base.where(Prompt.text_en.ilike(like))
-        count_base = count_base.where(Prompt.text_en.ilike(like))
+        tokens = [t for t in search.split() if t]
+        if tokens:
+            per_token = []
+            for tok in tokens:
+                like = f"%{tok}%"
+                per_token.append(
+                    or_(Prompt.text_en.ilike(like), Prompt.text_zh.ilike(like))
+                )
+            cond = and_(*per_token)
+            base = base.where(cond)
+            count_base = count_base.where(cond)
 
     if tag_ids:
         base = base.join(PromptTag, PromptTag.prompt_id == Prompt.id).where(

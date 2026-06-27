@@ -17,6 +17,7 @@ from .routers import prompts as prompts_router
 from .routers import records as records_router
 from .routers import tags as tags_router
 from .services import deepseek
+from .services.text_utils import strip_prompt_weight
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,6 +72,76 @@ async def _migrate_lora_entries(conn) -> None:
     )
 
 
+async def _migrate_strip_weights(conn) -> None:
+    rows = (
+        await conn.execute(text("SELECT id, text_en, usage_count FROM prompts"))
+    ).fetchall()
+    if not rows:
+        return
+
+    proposed: dict[int, str] = {}
+    group: dict[str, list[tuple[int, int]]] = {}
+    for r in rows:
+        new = strip_prompt_weight(r.text_en)
+        if not new or new == r.text_en:
+            continue
+        proposed[r.id] = new
+        group.setdefault(new.lower(), []).append((r.id, r.usage_count))
+
+    losers: set[int] = set()
+    for items in group.values():
+        if len(items) <= 1:
+            continue
+        items.sort(key=lambda x: (-x[1], x[0]))
+        winner_id = items[0][0]
+        for loser_id, loser_uc in items[1:]:
+            losers.add(loser_id)
+            await conn.execute(
+                text(
+                    "INSERT INTO prompt_tags (prompt_id, tag_id, created_at) "
+                    "SELECT :w, tag_id, now() FROM prompt_tags "
+                    "WHERE prompt_id = :l ON CONFLICT DO NOTHING"
+                ),
+                {"w": winner_id, "l": loser_id},
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO generation_record_prompts "
+                    "(record_id, prompt_id, created_at) "
+                    "SELECT record_id, :w, now() "
+                    "FROM generation_record_prompts "
+                    "WHERE prompt_id = :l ON CONFLICT DO NOTHING"
+                ),
+                {"w": winner_id, "l": loser_id},
+            )
+            await conn.execute(
+                text(
+                    "UPDATE prompts SET usage_count = usage_count + :uc "
+                    "WHERE id = :w"
+                ),
+                {"uc": loser_uc, "w": winner_id},
+            )
+            await conn.execute(
+                text("DELETE FROM prompts WHERE id = :l"), {"l": loser_id}
+            )
+
+    updated = 0
+    for pid, new in proposed.items():
+        if pid in losers:
+            continue
+        await conn.execute(
+            text("UPDATE prompts SET text_en = :n WHERE id = :id"),
+            {"n": new, "id": pid},
+        )
+        updated += 1
+    if updated or losers:
+        logger.info(
+            "strip-weights migration: updated=%d merged_losers=%d",
+            updated,
+            len(losers),
+        )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     (STATIC_DIR / "uploads").mkdir(parents=True, exist_ok=True)
@@ -79,6 +150,7 @@ async def lifespan(_: FastAPI):
         try:
             await _migrate_records(conn)
             await _migrate_lora_entries(conn)
+            await _migrate_strip_weights(conn)
         except Exception as e:
             logger.warning("Migration skipped: %s", e)
     yield
