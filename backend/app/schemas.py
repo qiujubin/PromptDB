@@ -154,4 +154,57 @@ class ImportResponse(BaseModel):
     items: list[LibraryItem]
 
 
+class LoraConfigOut(BaseModel):
+    folder_path: str | None = None
+    updated_at: datetime | None = None
+
+
+class LoraConfigUpdate(BaseModel):
+    folder_path: str | None = Field(default=None, max_length=1024)
+
+
+class LoraMeta(BaseModel):
+    base_model: str | None = None
+    trigger_words: str | None = None
+    network_module: str | None = None
+    description: str | None = None
+    author: str | None = None
+
+
+class TriggerGroup(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    words: list[str] = Field(default_factory=list, max_length=50)
+
+
+class LoraItem(BaseModel):
+    file_path: str
+    file_name: str
+    file_size: int
+    file_mtime: datetime | None = None
+    meta: LoraMeta
+    nickname: str | None = None
+    rating: int = 0
+    comment: str | None = None
+    lora_type: str | None = None
+    trigger_words_user: str | None = None
+    trigger_groups: list[TriggerGroup] = Field(default_factory=list)
+    has_meta: bool = False
+    updated_at: datetime | None = None
+
+
+class LoraListResponse(BaseModel):
+    folder_path: str | None = None
+    items: list[LoraItem]
+    total: int
+
+
+class LoraEntryUpdate(BaseModel):
+    nickname: str | None = Field(default=None, max_length=255)
+    rating: int | None = Field(default=None, ge=0, le=5)
+    comment: str | None = Field(default=None, max_length=2000)
+    lora_type: str | None = Field(default=None, max_length=64)
+    trigger_words_user: str | None = Field(default=None, max_length=8000)
+    trigger_groups: list[TriggerGroup] | None = None
+
+
 TagTreeNode.model_rebuild()

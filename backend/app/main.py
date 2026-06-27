@@ -12,6 +12,7 @@ from .config import settings
 from .db import Base, engine
 from .routers import generate as generate_router
 from .routers import library as library_router
+from .routers import loras as loras_router
 from .routers import prompts as prompts_router
 from .routers import records as records_router
 from .routers import tags as tags_router
@@ -55,6 +56,21 @@ async def _migrate_records(conn) -> None:
     )
 
 
+async def _migrate_lora_entries(conn) -> None:
+    await conn.execute(
+        text(
+            "ALTER TABLE lora_entries "
+            "ADD COLUMN IF NOT EXISTS trigger_words_user TEXT"
+        )
+    )
+    await conn.execute(
+        text(
+            "ALTER TABLE lora_entries "
+            "ADD COLUMN IF NOT EXISTS trigger_groups JSONB"
+        )
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     (STATIC_DIR / "uploads").mkdir(parents=True, exist_ok=True)
@@ -62,8 +78,9 @@ async def lifespan(_: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         try:
             await _migrate_records(conn)
+            await _migrate_lora_entries(conn)
         except Exception as e:
-            logger.warning("Record migration skipped: %s", e)
+            logger.warning("Migration skipped: %s", e)
     yield
     await deepseek.close_client()
     await engine.dispose()
@@ -96,6 +113,7 @@ app.include_router(prompts_router.router)
 app.include_router(library_router.router)
 app.include_router(tags_router.router)
 app.include_router(records_router.router)
+app.include_router(loras_router.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

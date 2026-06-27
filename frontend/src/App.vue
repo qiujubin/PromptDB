@@ -12,6 +12,7 @@ const menus = [
   { path: '/saver', label: '保存提示词' },
   { path: '/library', label: '提示词库' },
   { path: '/records', label: '历史记录' },
+  { path: '/loras', label: 'LoRA 管理' },
   { path: '/tags', label: '标签管理' },
 ]
 

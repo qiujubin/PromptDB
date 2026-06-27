@@ -5,6 +5,7 @@ import SaverView from '@/views/SaverView.vue'
 import LibraryView from '@/views/LibraryView.vue'
 import TagsView from '@/views/TagsView.vue'
 import RecordsView from '@/views/RecordsView.vue'
+import LorasView from '@/views/LorasView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -15,6 +16,7 @@ const router = createRouter({
     { path: '/saver', name: 'saver', component: SaverView },
     { path: '/library', name: 'library', component: LibraryView },
     { path: '/records', name: 'records', component: RecordsView },
+    { path: '/loras', name: 'loras', component: LorasView },
     { path: '/tags', name: 'tags', component: TagsView },
   ],
 })

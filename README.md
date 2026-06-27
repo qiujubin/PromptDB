@@ -1,13 +1,14 @@
 # AI 绘图提示词助手
 
-一个本地运行的 AI 绘图提示词工具，六个功能模块：
+一个本地运行的 AI 绘图提示词工具，七个功能模块：
 
 1. **生成提示词** — 输入中文描述，DeepSeek 生成可直接用于 Midjourney / Stable Diffusion 的英文提示词；结果卡片支持「一键保存」直接入库并创建历史记录
 2. **解析提示词** — 粘贴英文提示词，按 `,` 切分并并发翻译为中文，以紧凑标签云展示；点击「保存到提示词库」可将这些已翻译的片段直接入库（不再重复翻译，但仍自动打标签）
 3. **保存提示词** — 把英文提示词按 `,` 切分后入库，自动调用 DeepSeek 翻译为中文并用 AI 分配层级标签；可选填写中文描述，创建一条带原文的「历史记录」归档
 4. **提示词库** — 卡片式浏览，支持搜索、分类 / 子标签双 select 筛选、多选批量删除、抽屉式编辑标签
 5. **历史记录** — 瀑布流卡片浏览生成归档：评分、收藏、中英文描述、上传参考图、点击编辑；卡片默认显示标题、hover 展示详情
-6. **标签管理** — 树形维护「分类 → 子标签」两级体系；分类引用数为其下子标签累加和；点击标签可直接跳转到提示词库查看；提供「批量补打标签」按钮为旧数据补全 AI 标签
+6. **LoRA 管理** — 设定本机 ComfyUI LoRA 目录后，扫描 `.safetensors` 文件并解析其 header 元数据（底模 / 触发词 / 训练模块 / 描述 / 作者），卡片网格展示文件名 / 底模 / 昵称 / 评分 / 评价 / 类型 / 触发词（带一键复制与逐词复制）/ 文件大小 / 修改时间，可对每个 LoRA 起昵称、打分、写评价、分类
+7. **标签管理** — 树形维护「分类 → 子标签」两级体系；分类引用数为其下子标签累加和；点击标签可直接跳转到提示词库查看；提供「批量补打标签」按钮为旧数据补全 AI 标签
 
 ## 技术栈
 
@@ -52,13 +53,15 @@ Project_Prompt/
         │   ├── TagChips.vue
         │   ├── RecordCard.vue
         │   ├── RecordEditorDialog.vue
-        │   └── RecordImageGallery.vue
+        │   ├── RecordImageGallery.vue
+        │   └── LoraCard.vue
         ├── views/
         │   ├── GeneratorView.vue
         │   ├── ParserView.vue      # 标签云 + 直存
         │   ├── SaverView.vue
         │   ├── LibraryView.vue     # 卡片网格 + 多选 + 标签筛选 + 编辑抽屉
         │   ├── RecordsView.vue     # 瀑布流卡片 + 评分/收藏 + 图片上传
+        │   ├── LorasView.vue       # LoRA 目录扫描 + 元数据解析 + 卡片网格
         │   └── TagsView.vue        # 分类/子标签管理 + 批量补打
         └── router/index.ts
 ```
@@ -174,6 +177,18 @@ npm run dev
 | `DELETE` | `/api/records/{id}/images/{image_id}`         | 删除单张参考图                                                             |
 | `PATCH`  | `/api/records/{id}/images/order`              | 重排图片顺序，body `{ "image_ids": [...] }`                                 |
 
+### LoRA 管理
+
+| 方法     | 路径                                | 说明                                                                                |
+| -------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET`    | `/api/loras/config`                 | 当前 LoRA 目录配置                                                                  |
+| `PUT`    | `/api/loras/config`                 | body `{ "folder_path": "D:\\ComfyUI\\models\\loras" \| null }`，不存在/不可访问时返回 400 |
+| `GET`    | `/api/loras`                        | 扫描目录中 `.safetensors`（递归）合并 DB 自定义项，按文件名升序                      |
+| `PATCH`  | `/api/loras/entry?file_path=...`    | 更新某 LoRA 的自定义字段（`nickname` / `rating` / `comment` / `lora_type`）           |
+| `DELETE` | `/api/loras/entry?file_path=...`    | 清除该 LoRA 的自定义字段，恢复显示原始元数据                                         |
+
+> 元数据自动从 safetensors header 的 `__metadata__` 中抽取，支持 kohya_ss 风格（`ss_base_model_version` / `ss_trigger_words` / `ss_network_module` / `ss_tag_frequency`）和 SAI ModelSpec 风格（`modelspec.base_model` / `modelspec.trigger_phrase` / `modelspec.title` / `modelspec.author` / `modelspec.description` / `modelspec.network_module`）。无元数据的文件仍会显示文件名 / 大小 / 修改时间，并标注「无元数据」。
+
 ### 标签
 
 | 方法     | 路径                  | 说明                                                                  |
@@ -271,6 +286,15 @@ generation_record_prompts   # 历史记录 ↔ 提示词 多对多关联表
   record_id (FK generation_records.id, ON DELETE CASCADE)
   prompt_id (FK prompts.id,            ON DELETE CASCADE)
   PRIMARY KEY (record_id, prompt_id)
+
+lora_config        # 全局 LoRA 目录配置（单行，id=1）
+  id, folder_path, updated_at
+
+lora_entries       # LoRA 文件自定义信息（file_path 为主键）
+  file_path (PK), file_name, file_size, file_mtime
+  base_model, trigger_words, network_module, description, author  # 自动抽取
+  nickname, rating, comment, lora_type                            # 用户自定义
+  created_at, updated_at
 ```
 
 层级最多 2 层（顶级分类 → 叶子标签），由应用层在 `routers/tags.py::_check_two_level_parent` 强制。

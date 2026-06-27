@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -177,3 +178,51 @@ class GenerationRecordImage(Base):
     )
 
     record: Mapped["GenerationRecord"] = relationship(back_populates="images")
+
+
+class LoraConfig(Base):
+    __tablename__ = "lora_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    folder_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class LoraEntry(Base):
+    __tablename__ = "lora_entries"
+
+    file_path: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    file_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    file_mtime: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    base_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    trigger_words: Mapped[str | None] = mapped_column(Text, nullable=True)
+    network_module: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    author: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    nickname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lora_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    trigger_words_user: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trigger_groups: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
