@@ -156,12 +156,20 @@ async def save_prompts(req: SaveRequest, db: AsyncSession = Depends(get_db)) -> 
     ).scalars().all()
 
     record_id_out: int | None = None
-    if req.text_zh and req.text_zh.strip() and saved_items:
-        zh = req.text_zh.strip()
-        default_name = (zh[:30] + ("…" if len(zh) > 30 else "")).strip()
+    record_zh: str | None = None
+    if req.text_zh and req.text_zh.strip():
+        record_zh = req.text_zh.strip()
+    elif saved_items:
+        by_key = {p.text_en.strip().lower(): p.text_zh for p in saved_items}
+        zh_parts = [by_key[k] for k in lowered if by_key.get(k)]
+        if zh_parts:
+            record_zh = "、".join(zh_parts)
+
+    if record_zh and saved_items:
+        default_name = (record_zh[:30] + ("…" if len(record_zh) > 30 else "")).strip()
         record = GenerationRecord(
             name=default_name or None,
-            text_zh=zh,
+            text_zh=record_zh,
             text_en=", ".join([p.text_en for p in saved_items]),
             rating=0,
             is_favorite=False,

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 defineOptions({ name: 'ParserView' })
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { FolderAdd, MagicStick } from '@element-plus/icons-vue'
+import CopyButton from '@/components/CopyButton.vue'
+import SelectablePromptChips from '@/components/SelectablePromptChips.vue'
 import {
   importPrompts,
   parsePrompts,
@@ -15,6 +17,9 @@ const parsedItems = ref<ParseItem[]>([])
 const parsing = ref(false)
 const importing = ref(false)
 const importResult = ref<ImportResponse | null>(null)
+const chipsRef = ref<InstanceType<typeof SelectablePromptChips> | null>(null)
+
+const copyText = computed(() => chipsRef.value?.copyText ?? '')
 
 async function onParse() {
   if (!rawText.value.trim()) {
@@ -95,19 +100,15 @@ async function onImport() {
       </el-form-item>
     </el-form>
 
-    <div v-if="parsedItems.length" class="tag-cloud">
-      <div
-        v-for="(it, i) in parsedItems"
-        :key="i"
-        class="tag-chip"
-        :class="{ 'no-zh': !it.text_zh }"
-      >
-        <span class="en">{{ it.text_en }}</span>
-        <span class="zh">{{ it.text_zh || '翻译失败' }}</span>
-      </div>
-    </div>
+    <SelectablePromptChips
+      v-if="parsedItems.length"
+      ref="chipsRef"
+      :items="parsedItems"
+      mode="rich"
+    />
 
     <div v-if="parsedItems.length" class="actions">
+      <CopyButton :text="copyText" />
       <el-button
         type="success"
         :icon="FolderAdd"
@@ -138,47 +139,11 @@ async function onImport() {
   font-size: 16px;
   font-weight: 600;
 }
-.tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
-}
-.tag-chip {
-  display: inline-flex;
-  flex-direction: column;
-  max-width: 240px;
-  padding: 6px 10px;
-  background: var(--el-fill-color-light);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 6px;
-  transition: transform 0.15s ease, background 0.15s ease;
-  cursor: default;
-}
-.tag-chip:hover {
-  transform: translateY(-1px);
-  background: var(--el-color-primary-light-9);
-}
-.en {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--el-text-color-primary);
-  line-height: 1.4;
-  word-break: break-word;
-}
-.zh {
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.4;
-  word-break: break-word;
-}
-.tag-chip.no-zh .zh {
-  color: var(--el-color-danger);
-  font-style: italic;
-}
 .actions {
   margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .result {
   margin-top: 16px;

@@ -1,13 +1,25 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { FolderAdd } from '@element-plus/icons-vue'
 import CopyButton from './CopyButton.vue'
+import SelectablePromptChips from './SelectablePromptChips.vue'
 import { savePrompts } from '@/api/prompts'
 
 const props = defineProps<{ text: string; loading?: boolean; recordZh?: string }>()
 
 const saving = ref(false)
+const chipsRef = ref<InstanceType<typeof SelectablePromptChips> | null>(null)
+
+const chipItems = computed(() =>
+  props.text
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(text_en => ({ text_en })),
+)
+
+const copyText = computed(() => chipsRef.value?.copyText ?? '')
 
 async function onSave() {
   if (!props.text.trim()) {
@@ -39,9 +51,9 @@ async function onSave() {
   <el-card shadow="hover" class="output-card">
     <template #header>
       <div class="header">
-        <span>生成的英文提示词</span>
+        <span>生成的英文提示词（点击片段可选择复制）</span>
         <div class="actions">
-          <CopyButton :text="props.text" />
+          <CopyButton :text="copyText" :disabled="!text" />
           <el-button
             type="success"
             :icon="FolderAdd"
@@ -55,15 +67,13 @@ async function onSave() {
       </div>
     </template>
     <el-skeleton v-if="props.loading" :rows="4" animated />
-    <el-input
-      v-else
-      :model-value="props.text"
-      type="textarea"
-      :rows="6"
-      readonly
-      resize="none"
-      placeholder="生成结果会显示在这里..."
+    <SelectablePromptChips
+      v-else-if="chipItems.length"
+      ref="chipsRef"
+      :items="chipItems"
+      mode="plain"
     />
+    <div v-else class="empty-tip">生成结果会显示在这里...</div>
   </el-card>
 </template>
 
@@ -79,5 +89,11 @@ async function onSave() {
 .actions {
   display: flex;
   gap: 8px;
+}
+.empty-tip {
+  padding: 20px 0;
+  color: var(--el-text-color-placeholder);
+  text-align: center;
+  font-size: 13px;
 }
 </style>

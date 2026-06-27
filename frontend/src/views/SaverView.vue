@@ -56,13 +56,13 @@ async function onSave() {
           placeholder="masterpiece, best quality, 1girl, red dress, sunset, soft lighting"
         />
       </el-form-item>
-      <el-form-item label="中文描述（可选，填写后会在历史记录里建立一条带原文的归档）">
+      <el-form-item label="中文描述（可选，留空时将自动用各片段的中文翻译拼成历史记录）">
         <el-input
           v-model="textZh"
           type="textarea"
           :rows="3"
           resize="vertical"
-          placeholder="例如：一位穿红裙的女孩在夕阳下"
+          placeholder="留空即可：保存时会用各片段的中文翻译拼接成历史记录"
           maxlength="2000"
           show-word-limit
         />
