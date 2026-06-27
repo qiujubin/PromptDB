@@ -67,6 +67,17 @@ async function copyTrigger() {
   }
 }
 
+async function copyOriginalTriggers() {
+  const text = props.lora.meta.trigger_words?.trim()
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制原始触发词')
+  } catch {
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
+
 async function copyOne(word: string) {
   try {
     await navigator.clipboard.writeText(word)
@@ -267,6 +278,16 @@ function onNameKeydown(e: KeyboardEvent) {
               class="edit-trigger-btn"
               @click="emit('edit-triggers', lora)"
             />
+          </el-tooltip>
+          <el-tooltip v-if="lora.meta.trigger_words" content="复制 safetensors 里的初始触发词" placement="top">
+            <el-button
+              size="small"
+              :icon="DocumentCopy"
+              class="copy-original-btn"
+              @click="copyOriginalTriggers"
+            >
+              复制原始
+            </el-button>
           </el-tooltip>
           <el-button
             v-if="!hasGroups && triggerOverflow"

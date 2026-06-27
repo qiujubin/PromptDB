@@ -298,10 +298,30 @@ function removeGroup(idx: number) {
 }
 
 function addWordToGroup(idx: number) {
-  const word = (triggerNewWordInputs.value[idx] || '').trim()
-  if (!word) return
-  triggerGroupsDraft.value[idx].words.push(word)
+  const raw = triggerNewWordInputs.value[idx] ?? ''
+  if (!raw.trim()) return
+  const parts = raw
+    .split(/[,\n，]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (!parts.length) return
+  const group = triggerGroupsDraft.value[idx]
+  const existing = new Set(group.words)
+  for (const p of parts) {
+    if (!existing.has(p)) {
+      group.words.push(p)
+      existing.add(p)
+    }
+  }
   triggerNewWordInputs.value[idx] = ''
+}
+
+function onAddWordKeydown(e: KeyboardEvent, idx: number) {
+  if (e.isComposing || e.shiftKey) return
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    addWordToGroup(idx)
+  }
 }
 
 function removeWordFromGroup(idx: number, wi: number) {
@@ -617,10 +637,13 @@ onActivated(async () => {
                   </el-tag>
                   <el-input
                     v-model="triggerNewWordInputs[gi]"
+                    type="textarea"
+                    :autosize="{ minRows: 1, maxRows: 4 }"
                     size="small"
-                    placeholder="输入词后回车添加"
+                    resize="none"
+                    placeholder="可粘贴多个词（逗号 / 换行分隔，回车添加）"
                     class="add-word-input"
-                    @keyup.enter="addWordToGroup(gi)"
+                    @keydown="onAddWordKeydown($event, gi)"
                   />
                   <el-button size="small" @click="addWordToGroup(gi)">添加</el-button>
                 </div>

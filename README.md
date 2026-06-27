@@ -4,10 +4,10 @@
 
 1. **生成提示词** — 输入中文描述，DeepSeek 生成可直接用于 Midjourney / Stable Diffusion 的英文提示词；结果卡片支持「一键保存」直接入库并创建历史记录
 2. **解析提示词** — 粘贴英文提示词，按 `,` 切分并并发翻译为中文，以紧凑标签云展示；点击「保存到提示词库」可将这些已翻译的片段直接入库（不再重复翻译，但仍自动打标签）
-3. **保存提示词** — 把英文提示词按 `,` 切分后入库，自动调用 DeepSeek 翻译为中文并用 AI 分配层级标签；可选填写中文描述，创建一条带原文的「历史记录」归档
-4. **提示词库** — 卡片式浏览，支持搜索、分类 / 子标签双 select 筛选、多选批量删除、抽屉式编辑标签
+3. **保存提示词** — 把英文提示词按 `,` 切分后入库，自动调用 DeepSeek 翻译为中文并用 AI 分配层级标签；可选填写中文描述，创建一条带原文的「历史记录」归档；入库前自动剥离 `(text:1.2)` / `[text]` 等强调与权重语法，仅保留纯净关键词（`<lora:foo:0.8>` 标记原样保留）
+4. **提示词库** — 卡片式浏览，支持**中英文混合搜索**（按空格拆词，每词在 `text_en` 或 `text_zh` 中 OR 命中，词与词之间 AND）、分类 / 子标签双 select 筛选、多选批量删除、抽屉式编辑标签
 5. **历史记录** — 瀑布流卡片浏览生成归档：评分、收藏、中英文描述、上传参考图、点击编辑；卡片默认显示标题、hover 展示详情
-6. **LoRA 管理** — 设定本机 ComfyUI LoRA 目录后，扫描 `.safetensors` 文件并解析其 header 元数据（底模 / 触发词 / 训练模块 / 描述 / 作者），卡片网格展示文件名 / 底模 / 昵称 / 评分 / 评价 / 类型 / 触发词（带一键复制与逐词复制）/ 文件大小 / 修改时间，可对每个 LoRA 起昵称、打分、写评价、分类
+6. **LoRA 管理** — 设定本机 ComfyUI LoRA 目录后，扫描 `.safetensors` 文件并解析其 header 元数据（底模 / 触发词 / 训练模块 / 描述 / 作者），卡片网格展示文件名 / 底模 / 昵称 / 评分 / 评价 / 类型 / 触发词（带「一键复制 / 复制原始 / 逐词复制 / 按分组复制」）/ 文件大小 / 修改时间；支持编辑整段触发词、按场景分组（输入框支持逗号 / 换行批量粘贴自动拆词）、起昵称、打分、写评价、分类
 7. **标签管理** — 树形维护「分类 → 子标签」两级体系；分类引用数为其下子标签累加和；点击标签可直接跳转到提示词库查看；提供「批量补打标签」按钮为旧数据补全 AI 标签
 
 ## 技术栈
@@ -99,7 +99,10 @@ cp .env.example .env
 uvicorn app.main:app --reload --port 4165
 ```
 
-第一次启动时 SQLAlchemy 会自动建表（`prompts` / `tags` / `prompt_tags` / `generation_records` / `generation_record_images`），无需手动跑 migration。
+第一次启动时 SQLAlchemy 会自动建表（`prompts` / `tags` / `prompt_tags` / `generation_records` / `generation_record_images` / `lora_config` / `lora_entries`），无需手动跑 migration。启动时还会执行几次幂等的内联迁移：
+- `generation_records` 补 `name` 列、把历史 `text_en` 的换行替换成 `, `
+- `lora_entries` 补 `trigger_words_user` / `trigger_groups` 列
+- 扫描全部 `prompts`，把 `(text:1.2)` / `[text]` 等残留强调按当前规则剥离；剥离后若与已有行重复，按 `usage_count desc, id asc` 选出胜者，合并标签 / 历史记录关联并累加 `usage_count`，删除败者
 
 如果偏好 Alembic 管理 schema：
 
@@ -159,7 +162,7 @@ npm run dev
 | `POST`   | `/api/prompts/save`                        | 保存英文提示词（按 `,` 切分 + 翻译 + 自动打标，并行执行）；可附 `text_zh` 创建历史记录 |
 | `POST`   | `/api/prompts/parse`                       | 解析英文提示词：按 `,` 切分 + 并发翻译，**不写库**，返回 `{items: [{text_en, text_zh}], split_count, translation_failures}` |
 | `POST`   | `/api/prompts/import`                      | 直存已翻译片段：`{items: [{text_en, text_zh}], source?}` 跳过翻译，仅对新行自动打标；命中已存在则 `usage_count + 1` |
-| `GET`    | `/api/library`                             | 提示词库列表，按 `usage_count` 降序，可按 `tag_id` / `search` 过滤   |
+| `GET`    | `/api/library`                             | 提示词库列表，按 `usage_count` 降序，可按 `tag_id` 过滤；`search` 按空格拆词，每个 token 在 `text_en` 或 `text_zh` 中 OR 命中，token 间 AND |
 | `DELETE` | `/api/library/{id}`                        | 删除单条提示词                                                       |
 | `POST`   | `/api/library/bulk-delete`                 | 批量删除，body `{ "ids": [1,2,3] }`，返回 `{ "deleted": N }`         |
 | `POST`   | `/api/prompts/{id}/tags`                   | 替换某条提示词的标签集合，body `{ "tag_ids": [3,5] }`                |
@@ -184,7 +187,7 @@ npm run dev
 | `GET`    | `/api/loras/config`                 | 当前 LoRA 目录配置                                                                  |
 | `PUT`    | `/api/loras/config`                 | body `{ "folder_path": "D:\\ComfyUI\\models\\loras" \| null }`，不存在/不可访问时返回 400 |
 | `GET`    | `/api/loras`                        | 扫描目录中 `.safetensors`（递归）合并 DB 自定义项，按文件名升序                      |
-| `PATCH`  | `/api/loras/entry?file_path=...`    | 更新某 LoRA 的自定义字段（`nickname` / `rating` / `comment` / `lora_type`）           |
+| `PATCH`  | `/api/loras/entry?file_path=...`    | 更新某 LoRA 的自定义字段：`nickname` / `rating` / `comment` / `lora_type` / `trigger_words_user` / `trigger_groups` |
 | `DELETE` | `/api/loras/entry?file_path=...`    | 清除该 LoRA 的自定义字段，恢复显示原始元数据                                         |
 
 > 元数据自动从 safetensors header 的 `__metadata__` 中抽取，支持 kohya_ss 风格（`ss_base_model_version` / `ss_trigger_words` / `ss_network_module` / `ss_tag_frequency`）和 SAI ModelSpec 风格（`modelspec.base_model` / `modelspec.trigger_phrase` / `modelspec.title` / `modelspec.author` / `modelspec.description` / `modelspec.network_module`）。无元数据的文件仍会显示文件名 / 大小 / 修改时间，并标注「无元数据」。
@@ -294,6 +297,7 @@ lora_entries       # LoRA 文件自定义信息（file_path 为主键）
   file_path (PK), file_name, file_size, file_mtime
   base_model, trigger_words, network_module, description, author  # 自动抽取
   nickname, rating, comment, lora_type                            # 用户自定义
+  trigger_words_user, trigger_groups (JSONB)                      # 触发词整段覆盖 / 分组
   created_at, updated_at
 ```
 
